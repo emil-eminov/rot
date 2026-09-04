@@ -39,3 +39,39 @@ test('the arena renders', async ({ page }) => {
   expect(await page.evaluate(() => window.__rot!.phase())).toBe('PLAYING')
   expect(await page.screenshot()).toMatchSnapshot('arena-portrait.png', { maxDiffPixelRatio: 0.2 })
 })
+
+/**
+ * Plays in real time rather than through the simulate hook.
+ *
+ * The freeze that shipped in the first build was invisible to every other test
+ * because they all drove the simulation directly and never rendered a frame.
+ * This one runs the actual loop, with actual drawing, and fails if a single
+ * exception escapes or if the clock stops advancing.
+ */
+test('survives twenty seconds of real play without the loop dying', async ({ page }) => {
+  const errors: string[] = []
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') errors.push(msg.text())
+  })
+  page.on('pageerror', (err) => errors.push(err.message))
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+  await page.waitForFunction(() => window.__rot !== undefined, null, { timeout: 30_000 })
+
+  const readings: number[] = []
+  for (let i = 0; i < 10; i++) {
+    await page.waitForTimeout(2000)
+    readings.push((await page.evaluate(() => window.__rot!.stats())).seconds)
+  }
+
+  expect(errors, `errors during play: ${errors.join(' | ')}`).toEqual([])
+  // The clock only advances while the loop is alive, so a stalled reading is a
+  // frozen game even when nothing was logged.
+  for (let i = 1; i < readings.length; i++) {
+    expect(
+      readings[i]!,
+      `time stopped advancing at reading ${i}: ${readings.join(', ')}`,
+    ).toBeGreaterThan(readings[i - 1]!)
+  }
+})

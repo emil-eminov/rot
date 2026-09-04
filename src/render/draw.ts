@@ -147,6 +147,7 @@ export class Renderer {
   private drawGems(ctx: CanvasRenderingContext2D, world: World, time: number): void {
     ctx.fillStyle = PALETTE.gem
     for (const gem of world.gems) {
+      if (!gem.alive) continue
       const pulse = 3.4 + Math.sin(time * 6 + gem.x) * 0.7
       ctx.beginPath()
       ctx.arc(gem.x, gem.y, pulse, 0, Math.PI * 2)
@@ -156,6 +157,7 @@ export class Renderer {
 
   private drawEnemies(ctx: CanvasRenderingContext2D, world: World): void {
     for (const enemy of world.enemies) {
+      if (!enemy.alive) continue
       ctx.fillStyle = enemy.flash > 0 ? '#ffffff' : PALETTE.enemy[enemy.kind] ?? PALETTE.enemy[0]
       // Squash on flash: a hit that does not deform reads as no hit at all.
       const squash = enemy.flash > 0 ? 1.22 : 1
@@ -192,6 +194,7 @@ export class Renderer {
     ctx.lineWidth = 4
     ctx.beginPath()
     for (const bullet of world.bullets) {
+      if (!bullet.alive) continue
       // Drawn as a short streak along its own velocity: a dot at 640 units per
       // second is invisible, a streak reads as speed.
       ctx.moveTo(bullet.x, bullet.y)
@@ -202,11 +205,17 @@ export class Renderer {
 
   private drawParticles(ctx: CanvasRenderingContext2D, world: World): void {
     for (const particle of world.particles) {
-      const life = particle.life / particle.maxLife
-      ctx.globalAlpha = Math.max(0, life)
+      if (!particle.alive) continue
+      // Clamped here as well. Entities are drawn between a step and the next
+      // compaction, so the renderer cannot assume the simulation has already
+      // tidied up after itself.
+      const life = Math.max(0, Math.min(1, particle.life / particle.maxLife))
+      const radius = particle.radius * life
+      if (radius <= 0) continue
+      ctx.globalAlpha = life
       ctx.fillStyle = `hsl(${particle.hue}, 85%, ${45 + life * 30}%)`
       ctx.beginPath()
-      ctx.arc(particle.x, particle.y, particle.radius * life, 0, Math.PI * 2)
+      ctx.arc(particle.x, particle.y, radius, 0, Math.PI * 2)
       ctx.fill()
     }
     ctx.globalAlpha = 1

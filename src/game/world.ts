@@ -399,6 +399,10 @@ export class World {
       if (!particle.alive) continue
       particle.life -= dt
       if (particle.life <= 0) {
+        // Clamped, not merely flagged: a particle can be drawn after this and
+        // before the next compaction, and a negative life became a negative
+        // radius, which the canvas rejects by throwing.
+        particle.life = 0
         particle.alive = false
         continue
       }

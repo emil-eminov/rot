@@ -151,6 +151,48 @@ describe('a competent run', () => {
   })
 })
 
+/**
+ * Regression guards for the freeze.
+ *
+ * A particle drawn one frame after its life ran out asked the canvas for a
+ * negative radius. The canvas threw, the exception escaped the render callback,
+ * requestAnimationFrame was never called again, and the game stopped dead a few
+ * seconds into every run. Every existing test passed throughout, because they
+ * all drove the simulation directly and never rendered anything.
+ */
+describe('entities stay drawable', () => {
+  it('never leaves a particle with negative life', () => {
+    const world = new World(13)
+    for (let i = 0; i < 60 * 90 && world.phase !== 'DEAD'; i++) {
+      world.step(TICK_SECONDS, botSteering(world))
+      if (world.phase === 'CHOOSING') world.choose(world.choices[0]!)
+      for (const particle of world.particles) {
+        expect(particle.life).toBeGreaterThanOrEqual(0)
+        expect(particle.radius * (particle.life / particle.maxLife)).toBeGreaterThanOrEqual(0)
+      }
+    }
+  })
+
+  it('holds that guarantee through hitstop, when compaction is skipped', () => {
+    const world = new World(2)
+    // Run until a kill puts the world into hitstop, then keep stepping: this is
+    // the exact window where dead entities used to survive into a draw.
+    for (let i = 0; i < 60 * 60; i++) {
+      world.step(TICK_SECONDS, botSteering(world))
+      if (world.hitstop > 0) {
+        for (let j = 0; j < 6; j++) {
+          world.step(TICK_SECONDS, { x: 0, y: 0 })
+          for (const particle of world.particles) {
+            expect(particle.life).toBeGreaterThanOrEqual(0)
+          }
+        }
+        return
+      }
+    }
+    throw new Error('never entered hitstop, so this test proved nothing')
+  })
+})
+
 describe('upgrades', () => {
   it('stops offering an upgrade once it has hit its cap', () => {
     const world = new World(1)

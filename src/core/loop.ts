@@ -46,16 +46,38 @@ export interface LoopHandle {
   stop(): void
 }
 
+/**
+ * Errors are caught and the loop keeps running.
+ *
+ * This is not defensive decoration. Without it, one exception anywhere in a
+ * step or a draw means requestAnimationFrame is never called again and the game
+ * freezes completely, with no message and no recovery. That is exactly what
+ * happened: a particle drawn one frame after its life ran out asked the canvas
+ * for a negative radius, the canvas threw, and the whole game stopped.
+ *
+ * A frame that fails is skipped. Failures are reported once so a real bug is
+ * still visible rather than silently swallowed.
+ */
 export function startLoop(step: (tick: number) => void, render: (alpha: number) => void): LoopHandle {
   let state = INITIAL_LOOP_STATE
   let last = performance.now()
+  let reported = false
   let frame = requestAnimationFrame(onFrame)
+
   function onFrame(now: number): void {
-    const result = advance(state, (now - last) / 1000, step)
+    try {
+      const result = advance(state, (now - last) / 1000, step)
+      state = result.state
+      render(result.alpha)
+    } catch (error) {
+      if (!reported) {
+        reported = true
+        console.error('Frame failed, continuing:', error)
+      }
+    }
     last = now
-    state = result.state
-    render(result.alpha)
     frame = requestAnimationFrame(onFrame)
   }
+
   return { stop: () => cancelAnimationFrame(frame) }
 }
