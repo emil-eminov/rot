@@ -1,12 +1,6 @@
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import { defineConfig } from 'vitest/config'
 
-/**
- * Build output goes outside the synced project folder: it is mounted without
- * delete permission, so Vite cannot clear an out-dir inside it.
- */
-const OUT_DIR = process.env.ROT_DIST ?? join(homedir(), 'rot-build', 'dist')
+const OUT_DIR = process.env.ROT_DIST ?? 'dist'
 
 export default defineConfig({
   base: './',
